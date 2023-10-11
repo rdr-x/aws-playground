@@ -1,0 +1,100 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Initial definitions for multi-environment resources'
+
+Parameters:
+  BranchName:
+    Default: main
+    Description: Infrastructure deployment
+    Type: String
+  Environment:
+    Description: Development environment.
+    ConstraintDescription: Must be DEV, STG or PRD
+    Type: String
+    Default: DEV  
+    AllowedValues:
+      - DEV
+      - STG
+      - PRD
+
+Conditions:
+  isDev:
+    Condition: !Equals
+    Values:
+      - DEV
+    Variable: Environment
+  isStage:
+    Condition: !Equals
+    Values:
+      - STG
+    Variable: Environment
+  isProd:
+    Condition: !Equals
+    Values:
+      - PRD
+    Variable: Environment
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: Choose Branch and Environment
+      Parameters:
+      - Environment
+      - BranchName
+
+Mappings:
+  EnvMap:
+    DEV:
+      EC2AMI: 'ami-067d1e60475437da2'
+    STG:
+      EC2AMI: 'ami-067d1e60475437da2'
+    PRD:
+      EC2AMI: 'ami-067d1e60475437da2'
+
+
+Resources:
+  ProjectLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |
+          import json
+
+          def handler(event, context):
+            return {
+              "statusCode": 200,
+              "body": json.dumps({"message": "Hola, mundo!"})
+            }
+      Description: Return a simple message
+      Handler: index.handler
+      Role: !GetAtt LambdaRole.Arn
+      Runtime: python3.10
+      MemorySize: 128
+      Timeout: 300
+      Tags:
+      - Key: "Environment"
+        Value: !Ref Environment
+
+  ProjectS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${Environment}-bucket"
+      AccessControl: PrivateRead
+      Tags:
+      - Key: "Environment"
+        Value: !Ref Environment
+  ProjectEC2Instance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      InstanceType: !Ref isDev
+          - t2.micro
+      ImageId:  !FindInMap [EnvMap, !Ref Environment, EC2AMI]
+      Tags:
+        - Key: "Environment"
+          Value: !Ref Environment
+
+Outputs: 
+  ResourcesDeployment: 
+    Description: Resources deployment
+    Value: !FindInMap [EnvMap, Environment, !Ref Environment]
